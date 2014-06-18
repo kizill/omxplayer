@@ -153,7 +153,7 @@ void print_usage()
   printf("         -h / --help                    print this help\n");
   printf("         -v / --version                 print version info\n");
   printf("         -k / --keys                    print key bindings\n");
-//  printf("         -a / --alang language          audio language        : e.g. ger\n");
+  //  printf("         -a / --alang language          audio language        : e.g. ger\n");
   printf("         -n / --aidx  index             audio stream index    : e.g. 1\n");
   printf("         -o / --adev  device            audio out device      : e.g. hdmi/local/both\n");
   printf("         -i / --info                    dump stream format and exit\n");
@@ -169,6 +169,7 @@ void print_usage()
   printf("         -r / --refresh                 adjust framerate/resolution to video\n");
   printf("         -g / --genlog                  generate log file\n");
   printf("         -l / --pos n                   start position (hh:mm:ss)\n");
+  printf("              --stoppos n               stop position (hh:mm:ss)\n");
   printf("         -b / --blank                   set background to black\n");
   printf("              --loop                    loop file. Ignored if file is not seekable, start position applied if given\n");
   printf("              --no-boost-on-downmix     don't boost volume when downmixing\n");
@@ -575,6 +576,7 @@ int main(int argc, char *argv[])
   std::string           m_filename;
   double                m_incr                = 0;
   double                m_loop_from           = 0;
+  double                m_play_till           = -1;
   CRBP                  g_RBP;
   COMXCore              g_OMX;
   bool                  m_stats               = false;
@@ -628,6 +630,7 @@ int main(int argc, char *argv[])
   const int loop_opt        = 0x20a;
   const int layer_opt       = 0x20b;
   const int no_keys_opt     = 0x20c;
+  const int stop_pos_opt    = 0x20d;
 
   struct option longopts[] = {
     { "info",         no_argument,        NULL,          'i' },
@@ -650,6 +653,7 @@ int main(int argc, char *argv[])
     { "genlog",       no_argument,        NULL,          'g' },
     { "sid",          required_argument,  NULL,          't' },
     { "pos",          required_argument,  NULL,          'l' },    
+    { "stoppos",      required_argument,  NULL,          stop_pos_opt },
     { "blank",        no_argument,        NULL,          'b' },
     { "font",         required_argument,  NULL,          font_opt },
     { "italic-font",  required_argument,  NULL,          italic_font_opt },
@@ -773,6 +777,20 @@ int main(int argc, char *argv[])
             m_loop_from = m_incr;
         }
         break;
+      case stop_pos_opt:
+        {
+          if(strchr(optarg, ':'))
+          {
+            unsigned int h, m, s;
+            if(sscanf(optarg, "%u:%u:%u", &h, &m, &s) == 3)
+              m_play_till = h*3600 + m*60 + s;
+          }
+          else
+          {
+            m_play_till = atof(optarg);
+          }
+        }
+        break;
       case no_osd_opt:
         m_osd = false;
         break;
@@ -808,13 +826,13 @@ int main(int argc, char *argv[])
         m_subtitle_lines = std::max(atoi(optarg), 1);
         break;
       case pos_opt:
-  sscanf(optarg, "%f %f %f %f", &DestRect.x1, &DestRect.y1, &DestRect.x2, &DestRect.y2);
+        sscanf(optarg, "%f %f %f %f", &DestRect.x1, &DestRect.y1, &DestRect.x2, &DestRect.y2);
         break;
       case vol_opt:
-	m_Volume = atoi(optarg);
+        m_Volume = atoi(optarg);
         break;
       case amp_opt:
-	m_Amplification = atoi(optarg);
+        m_Amplification = atoi(optarg);
         break;
       case boost_on_downmix_opt:
         m_boost_on_downmix = true;
@@ -823,19 +841,19 @@ int main(int argc, char *argv[])
         m_boost_on_downmix = false;
         break;
       case audio_fifo_opt:
-  audio_fifo_size = atof(optarg);
+        audio_fifo_size = atof(optarg);
         break;
       case video_fifo_opt:
-  video_fifo_size = atof(optarg);
+        video_fifo_size = atof(optarg);
         break;
       case audio_queue_opt:
-  audio_queue_size = atof(optarg);
+        audio_queue_size = atof(optarg);
         break;
       case video_queue_opt:
-  video_queue_size = atof(optarg);
+        video_queue_size = atof(optarg);
         break;
       case threshold_opt:
-  m_threshold = atof(optarg);
+        m_threshold = atof(optarg);
         break;
       case timeout_opt:
         m_timeout = atof(optarg);
@@ -1163,6 +1181,11 @@ int main(int argc, char *argv[])
     {
       update = true;
       m_last_check_time = now;
+    }
+    if(m_play_till>0 && (m_av_clock->OMXMediaTime()*1e-6)>=m_play_till)
+    {
+      m_stop = true;
+      goto do_exit;
     }
 
      if (update) {
